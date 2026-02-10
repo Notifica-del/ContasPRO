@@ -4,7 +4,6 @@ import { OCRResult, Bill } from "./types";
 
 // Função para obter o cliente AI de forma segura
 const getAIClient = () => {
-  // Tenta obter a chave do process.env injetado pelo Vite
   const apiKey = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : undefined;
   
   if (!apiKey) {
@@ -14,7 +13,7 @@ const getAIClient = () => {
   return new GoogleGenAI({ apiKey: apiKey || 'missing-api-key' });
 };
 
-export const processBillImage = async (base64Image: string): Promise<OCRResult> => {
+export const processBillDocument = async (base64Data: string, mimeType: string = 'image/jpeg'): Promise<OCRResult> => {
   const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
@@ -22,12 +21,22 @@ export const processBillImage = async (base64Image: string): Promise<OCRResult> 
       parts: [
         {
           inlineData: {
-            mimeType: 'image/jpeg',
-            data: base64Image.split(',')[1] || base64Image,
+            mimeType: mimeType,
+            data: base64Data.split(',')[1] || base64Data,
           },
         },
         {
-          text: 'Extraia os dados deste boleto ou fatura. Identifique o beneficiário, o valor total, a data de vencimento e a categoria sugerida entre (Energia, Água, Internet, Aluguel, Fornecedores, Impostos, Salários, Manutenção, Outros).'
+          text: `Você é um especialista em processamento de documentos financeiros brasileiros (boletos, faturas, recibos, PDFs de cobrança). 
+          Sua tarefa é extrair dados precisos deste documento.
+          
+          Instruções:
+          1. Localize o Beneficiário (nome da empresa ou pessoa que recebe o pagamento).
+          2. Localize o Valor Total (apenas o número, ignore o símbolo R$).
+          3. Localize a Data de Vencimento. Tente converter para o formato ISO (YYYY-MM-DD).
+          4. Sugira uma categoria baseada no emissor (Energia, Água, Internet, Aluguel, Fornecedores, Impostos, Salários, Manutenção, Outros).
+
+          Se o documento for um PDF com várias páginas, analise todas para encontrar os dados finais de fechamento.
+          Se não tiver certeza absoluta de um campo, forneça sua melhor estimativa ou deixe uma string vazia ("") em vez de falhar.`
         }
       ]
     },
@@ -36,10 +45,22 @@ export const processBillImage = async (base64Image: string): Promise<OCRResult> 
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          beneficiary: { type: Type.STRING },
-          amount: { type: Type.NUMBER },
-          dueDate: { type: Type.STRING },
-          category: { type: Type.STRING }
+          beneficiary: { 
+            type: Type.STRING,
+            description: "Nome do beneficiário ou empresa emissora"
+          },
+          amount: { 
+            type: Type.NUMBER,
+            description: "Valor numérico total do documento"
+          },
+          dueDate: { 
+            type: Type.STRING,
+            description: "Data de vencimento no formato YYYY-MM-DD"
+          },
+          category: { 
+            type: Type.STRING,
+            description: "Categoria sugerida para o gasto"
+          }
         },
         required: ['beneficiary', 'amount', 'dueDate', 'category']
       }
@@ -47,8 +68,14 @@ export const processBillImage = async (base64Image: string): Promise<OCRResult> 
   });
 
   const text = response.text;
-  if (!text) throw new Error('Falha na resposta do Gemini');
-  return JSON.parse(text) as OCRResult;
+  if (!text) throw new Error('O modelo não retornou dados para este documento.');
+  
+  try {
+    return JSON.parse(text) as OCRResult;
+  } catch (e) {
+    console.error("Erro ao parsear JSON da IA:", text);
+    throw new Error('Erro ao processar os dados extraídos pela IA.');
+  }
 };
 
 export const chatWithFinancialAssistant = async (query: string, bills: Bill[]): Promise<string> => {
