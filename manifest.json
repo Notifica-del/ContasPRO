@@ -1,0 +1,18 @@
+
+{
+  "name": "ContasPro - Gestão Financeira IA",
+  "short_name": "ContasPro",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "description": "Gestão de contas multi-unidades com automação Gemini IA.",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2845/2845700.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

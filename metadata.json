@@ -1,0 +1,7 @@
+{
+  "name": "ContasPro",
+  "description": "Financial management PWA for multi-unit companies with AI-powered bill OCR and advanced access control.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
