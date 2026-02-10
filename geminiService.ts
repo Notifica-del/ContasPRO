@@ -2,41 +2,36 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { OCRResult, Bill } from "./types";
 
-// Função para obter o cliente AI de forma segura
-const getAIClient = () => {
-  const apiKey = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : undefined;
-  
-  if (!apiKey) {
-    console.warn("Atenção: API_KEY não configurada. Funcionalidades de IA podem falhar.");
-  }
-  
-  return new GoogleGenAI({ apiKey: apiKey || 'missing-api-key' });
-};
-
 export const processBillDocument = async (base64Data: string, mimeType: string = 'image/jpeg'): Promise<OCRResult> => {
-  const ai = getAIClient();
+  // Inicialização direta conforme diretrizes
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  // Limpa o prefixo data:mime/type;base64, se existir
+  const cleanBase64 = base64Data.includes('base64,') 
+    ? base64Data.split('base64,')[1] 
+    : base64Data;
+
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3-pro-preview', // Upgrade para Pro para maior precisão em OCR/PDF
     contents: {
       parts: [
         {
           inlineData: {
             mimeType: mimeType,
-            data: base64Data.split(',')[1] || base64Data,
+            data: cleanBase64,
           },
         },
         {
-          text: `Você é um especialista em processamento de documentos financeiros brasileiros (boletos, faturas, recibos, PDFs de cobrança). 
-          Sua tarefa é extrair dados precisos deste documento.
-          
-          Instruções:
-          1. Localize o Beneficiário (nome da empresa ou pessoa que recebe o pagamento).
-          2. Localize o Valor Total (apenas o número, ignore o símbolo R$).
-          3. Localize a Data de Vencimento. Tente converter para o formato ISO (YYYY-MM-DD).
-          4. Sugira uma categoria baseada no emissor (Energia, Água, Internet, Aluguel, Fornecedores, Impostos, Salários, Manutenção, Outros).
+          text: `Aja como um motor de OCR financeiro de alta precisão. Analise este documento (imagem ou PDF) e extraia os dados necessários para o contas a pagar.
 
-          Se o documento for um PDF com várias páginas, analise todas para encontrar os dados finais de fechamento.
-          Se não tiver certeza absoluta de um campo, forneça sua melhor estimativa ou deixe uma string vazia ("") em vez de falhar.`
+Regras de Extração:
+1. BENEFICIÁRIO: Identifique o nome da empresa, fornecedor ou pessoa que deve receber o pagamento. Procure por termos como "Beneficiário", "Cedente" ou "Emissor".
+2. VALOR: Extraia o valor total final a ser pago. Ignore juros ou multas se houver um "Valor do Documento" claro. Retorne apenas o número (ex: 1250.50).
+3. VENCIMENTO: Localize a data de vencimento. Se houver múltiplas parcelas no mesmo PDF, extraia a data da primeira ou da principal. Retorne sempre no formato ISO YYYY-MM-DD.
+4. CATEGORIA: Classifique o gasto entre: Energia, Água, Internet, Aluguel, Fornecedores, Impostos, Salários, Manutenção ou Outros.
+
+Documentos Brasileiros:
+Fique atento a campos como "Vencimento", "Valor Cobrado", "Nosso Número" e nomes de bancos. Se for uma fatura de cartão, pegue o "Valor Total da Fatura".`
         }
       ]
     },
@@ -45,22 +40,10 @@ export const processBillDocument = async (base64Data: string, mimeType: string =
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          beneficiary: { 
-            type: Type.STRING,
-            description: "Nome do beneficiário ou empresa emissora"
-          },
-          amount: { 
-            type: Type.NUMBER,
-            description: "Valor numérico total do documento"
-          },
-          dueDate: { 
-            type: Type.STRING,
-            description: "Data de vencimento no formato YYYY-MM-DD"
-          },
-          category: { 
-            type: Type.STRING,
-            description: "Categoria sugerida para o gasto"
-          }
+          beneficiary: { type: Type.STRING },
+          amount: { type: Type.NUMBER },
+          dueDate: { type: Type.STRING },
+          category: { type: Type.STRING }
         },
         required: ['beneficiary', 'amount', 'dueDate', 'category']
       }
@@ -68,18 +51,28 @@ export const processBillDocument = async (base64Data: string, mimeType: string =
   });
 
   const text = response.text;
-  if (!text) throw new Error('O modelo não retornou dados para este documento.');
+  if (!text) throw new Error('Não foi possível extrair texto do documento.');
   
   try {
-    return JSON.parse(text) as OCRResult;
+    const result = JSON.parse(text) as OCRResult;
+    
+    // Normalização extra de segurança para a data caso venha em formato BR
+    if (result.dueDate && result.dueDate.includes('/')) {
+      const parts = result.dueDate.split('/');
+      if (parts.length === 3) {
+        result.dueDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+    }
+    
+    return result;
   } catch (e) {
-    console.error("Erro ao parsear JSON da IA:", text);
-    throw new Error('Erro ao processar os dados extraídos pela IA.');
+    console.error("Erro no parse do JSON do Gemini:", text);
+    throw new Error('Erro na interpretação dos dados do documento.');
   }
 };
 
 export const chatWithFinancialAssistant = async (query: string, bills: Bill[]): Promise<string> => {
-  const ai = getAIClient();
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const context = bills.map(b => ({
     empresa: b.beneficiary,
     valor: b.amount,
@@ -89,30 +82,30 @@ export const chatWithFinancialAssistant = async (query: string, bills: Bill[]): 
   }));
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3-pro-preview',
     contents: [
       {
         role: 'user',
-        parts: [{ text: `Você é o consultor financeiro do ContasPro. Abaixo estão as contas atuais da empresa: ${JSON.stringify(context)}. Responda de forma curta e profissional à pergunta: ${query}` }]
+        parts: [{ text: `Contexto Financeiro: ${JSON.stringify(context)}. Pergunta: ${query}` }]
       }
     ],
     config: {
-      systemInstruction: 'Seja direto, profissional e ajude o usuário a entender sua saúde financeira. Use português do Brasil.'
+      systemInstruction: 'Você é o analista financeiro sênior da ContasPro. Responda de forma executiva, precisa e em português do Brasil.'
     }
   });
 
-  return response.text || "Desculpe, não consegui analisar as informações agora.";
+  return response.text || "Sem resposta do assistente.";
 };
 
 export const getDashboardInsight = async (bills: Bill[]): Promise<string> => {
-  const ai = getAIClient();
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const pending = bills.filter(b => b.status === 'PENDING');
-  if (pending.length === 0) return "Tudo em dia! Nenhuma conta pendente no momento.";
+  if (pending.length === 0) return "Fluxo de caixa saudável. Nenhuma pendência imediata.";
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Com base nestas contas pendentes: ${JSON.stringify(pending.slice(0, 10))}, gere um insight rápido de uma frase para o dashboard. Foque em urgências ou economia.`
+    contents: `Analise rapidamente: ${JSON.stringify(pending.slice(0, 5))}. Gere um insight de 15 palavras sobre o que priorizar.`
   });
 
-  return response.text || "Analise suas contas pendentes para evitar juros.";
+  return response.text || "Mantenha o acompanhamento de suas contas.";
 };
