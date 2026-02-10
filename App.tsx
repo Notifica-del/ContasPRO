@@ -9,15 +9,18 @@ import BillList from './components/BillList';
 import Scanner from './components/Scanner';
 import AdminPanel from './components/AdminPanel';
 import Assistant from './components/Assistant';
-import { Key } from 'lucide-react';
+import { Key, Sparkles, AlertCircle } from 'lucide-react';
 
-// Proper global declaration for aistudio to avoid TS2339 and handle potential environment conflicts
+// Declaration to satisfy TypeScript compiler for environmental global objects
+// Fix: Use the correct AIStudio type as expected by the environment to avoid conflicting declarations
+// We define the AIStudio interface locally as well to ensure it is recognized during compilation if not already global
 declare global {
+  interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+  }
   interface Window {
-    aistudio?: {
-      hasSelectedApiKey: () => Promise<boolean>;
-      openSelectKey: () => Promise<void>;
-    };
+    aistudio: AIStudio;
   }
 }
 
@@ -31,41 +34,49 @@ const App: React.FC = () => {
   const [notificationPermission, setNotificationPermission] = useState<'default' | 'granted' | 'denied'>('default');
 
   // Check if API key is already selected on mount
-  useEffect(() => {
-    const checkKey = async () => {
-      const aistudio = window.aistudio;
-      if (aistudio) {
-        try {
-          const selected = await aistudio.hasSelectedApiKey();
-          setHasApiKey(selected);
-        } catch (e) {
-          console.debug("Erro ao verificar chave:", e);
-          setHasApiKey(false);
-        }
-      } else {
-        // If aistudio is not present, assume key is provided via standard process.env (e.g., local dev)
-        setHasApiKey(true);
+  const checkKeyStatus = useCallback(async () => {
+    if (window.aistudio) {
+      try {
+        const selected = await window.aistudio.hasSelectedApiKey();
+        setHasApiKey(selected);
+      } catch (e) {
+        console.debug("Failed to check key status:", e);
+        setHasApiKey(false);
       }
-    };
-    checkKey();
+    } else {
+      // Local dev or non-restricted environment
+      setHasApiKey(true);
+    }
   }, []);
 
+  useEffect(() => {
+    checkKeyStatus();
+
+    // Listener for when the service encounters an "Entity not found" error
+    const handleKeyError = () => {
+      setHasApiKey(false);
+      // Automatically attempt to re-open selection if possible
+      window.aistudio?.openSelectKey().then(() => setHasApiKey(true));
+    };
+
+    window.addEventListener('AISTUDIO_API_KEY_ERROR', handleKeyError);
+    return () => window.removeEventListener('AISTUDIO_API_KEY_ERROR', handleKeyError);
+  }, [checkKeyStatus]);
+
   const handleSelectKey = async () => {
-    const aistudio = window.aistudio;
-    if (aistudio) {
+    if (window.aistudio) {
       try {
-        await aistudio.openSelectKey();
-        // Mandatory: Assume successful selection and proceed to avoid race condition
+        await window.aistudio.openSelectKey();
+        // Mandatory: Assume success to avoid race condition delays
         setHasApiKey(true); 
       } catch (e) {
-        console.error("Erro ao abrir seletor de chave:", e);
+        console.error("Error opening key selector:", e);
       }
     }
   };
 
   // App initialization logic
   useEffect(() => {
-    // Only proceed if key state is resolved and positive
     if (hasApiKey !== true) return;
 
     const initApp = () => {
@@ -97,7 +108,7 @@ const App: React.FC = () => {
           setNotificationPermission(Notification.permission as any);
         }
       } catch (err) {
-        console.error("Erro crítico na inicialização:", err);
+        console.error("Critical error during initialization:", err);
         setCurrentUser(INITIAL_USERS[0]);
       } finally {
         setIsLoaded(true);
@@ -127,8 +138,8 @@ const App: React.FC = () => {
         navigator.serviceWorker.controller.postMessage({
           type: 'SHOW_NOTIFICATION',
           payload: {
-            title: 'Lembrete de Vencimento - ContasPro',
-            body: `O boleto "${bill.beneficiary}" de R$ ${bill.amount.toFixed(2)} vence amanhã!`
+            title: 'Lembrete: Vencimento Amanhã',
+            body: `A conta "${bill.beneficiary}" de R$ ${bill.amount.toFixed(2)} vence em 24h.`
           }
         });
         storage.markNotificationAsSent(bill.id);
@@ -182,44 +193,57 @@ const App: React.FC = () => {
     setNotificationPermission(permission as any);
   };
 
-  // Logic to handle "Requested entity was not found" error globally if needed
-  // For now, it's handled via the UI in Scanner/Assistant, but we could add a window listener here
-
-  // Blocking screen if API Key is not yet selected in an environment that requires it
+  // Blocking key selection screen
   if (hasApiKey === false) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-        <div className="max-w-sm w-full bg-white p-8 rounded-3xl shadow-xl border border-slate-100 text-center animate-scale-in">
-          <div className="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <Key className="w-10 h-10 text-blue-600" />
+        <div className="max-w-md w-full bg-white p-10 rounded-[2.5rem] shadow-2xl shadow-blue-100/50 border border-slate-100 text-center animate-scale-in relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-600" />
+          
+          <div className="w-24 h-24 bg-blue-50 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner relative">
+             <Key className="w-12 h-12 text-blue-600" />
+             <div className="absolute -top-2 -right-2 bg-indigo-600 text-white p-1.5 rounded-lg shadow-lg">
+                <Sparkles className="w-4 h-4" />
+             </div>
           </div>
-          <h2 className="text-2xl font-black text-slate-800 mb-2">Configuração da IA</h2>
-          <p className="text-slate-500 text-sm mb-8 leading-relaxed">
-            Para habilitar o scanner de boletos e o assistente financeiro, selecione uma chave de API válida de um projeto faturado.
+
+          <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Potencialize com IA</h2>
+          <p className="text-slate-500 text-base mb-10 leading-relaxed px-2">
+            O ContasPro utiliza os modelos mais avançados da Google para automatizar sua gestão financeira. Selecione sua chave de API para começar.
           </p>
           
-          <button 
-            onClick={handleSelectKey}
-            className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-100 active:scale-95 transition-all flex items-center justify-center space-x-2"
-          >
-            <span>Configurar API Key</span>
-          </button>
+          <div className="space-y-4">
+            <button 
+              onClick={handleSelectKey}
+              className="w-full py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-lg shadow-xl shadow-blue-200 active:scale-[0.98] transition-all flex items-center justify-center space-x-3 group"
+            >
+              <span>Configurar Agora</span>
+              <Sparkles className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+            </button>
+
+            <div className="flex items-center justify-center space-x-2 text-slate-400">
+               <AlertCircle className="w-4 h-4" />
+               <span className="text-[11px] font-bold uppercase tracking-wider">Requer faturamento ativo</span>
+            </div>
+          </div>
           
-          <p className="mt-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-relaxed px-4">
-            Saiba mais em <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-blue-500 underline">ai.google.dev/billing</a>
-          </p>
+          <div className="mt-12 pt-8 border-t border-slate-50">
+             <p className="text-xs text-slate-400 font-medium">
+               Dúvidas sobre o faturamento? <br />
+               <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-blue-500 font-bold underline hover:text-blue-600">Consulte o guia oficial</a>
+             </p>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Loading state
   if (!isLoaded || !currentUser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center">
-          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-slate-400 text-[10px] mt-4 font-black uppercase tracking-[0.2em]">Carregando ContasPro...</p>
+          <div className="w-12 h-12 border-[5px] border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-slate-400 text-[10px] mt-6 font-black uppercase tracking-[0.3em] animate-pulse">Sincronizando ContasPro</p>
         </div>
       </div>
     );
