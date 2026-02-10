@@ -13,14 +13,14 @@ import { Key, Sparkles, AlertCircle } from 'lucide-react';
 
 // Declaration to satisfy TypeScript compiler for environmental global objects
 // Fix: Use the correct AIStudio type as expected by the environment to avoid conflicting declarations
-// We define the AIStudio interface locally as well to ensure it is recognized during compilation if not already global
 declare global {
   interface AIStudio {
     hasSelectedApiKey: () => Promise<boolean>;
     openSelectKey: () => Promise<void>;
   }
   interface Window {
-    aistudio: AIStudio;
+    // Adding optional modifier to match environment declaration and avoid "identical modifiers" error
+    aistudio?: AIStudio;
   }
 }
 
