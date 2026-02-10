@@ -1,9 +1,9 @@
 
 import React, { useState, useRef } from 'react';
 import { Camera, Upload, Loader2, CheckCircle, XCircle, PencilLine, Keyboard } from 'lucide-react';
-import { processBillImage } from '../geminiService.ts';
-import { OCRResult, Bill, BillType, BillStatus } from '../types.ts';
-import { CATEGORIES, COMPANIES } from '../constants.tsx';
+import { processBillImage } from '../geminiService';
+import { OCRResult, Bill, BillType, BillStatus } from '../types';
+import { CATEGORIES, COMPANIES } from '../constants';
 
 interface ScannerProps {
   onAddBill: (bill: Partial<Bill>) => void;

@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, Send, Loader2, Bot, User as UserIcon } from 'lucide-react';
-import { chatWithFinancialAssistant } from '../geminiService.ts';
-import { Bill } from '../types.ts';
+import { chatWithFinancialAssistant } from '../geminiService';
+import { Bill } from '../types';
 
 interface Message {
   role: 'user' | 'assistant';

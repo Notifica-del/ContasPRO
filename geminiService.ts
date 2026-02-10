@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { OCRResult, Bill } from "./types.ts";
+import { OCRResult, Bill } from "./types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 

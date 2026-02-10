@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { Bill, Company, BillStatus } from '../types.ts';
+import { Bill, Company, BillStatus } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { TrendingUp, Clock, AlertTriangle, CheckCircle2, ReceiptText, Bell, ChevronRight, Sparkles, Loader2 } from 'lucide-react';
-import { getDashboardInsight } from '../geminiService.ts';
+import { getDashboardInsight } from '../geminiService';
 
 interface DashboardProps {
   bills: Bill[];

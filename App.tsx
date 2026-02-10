@@ -1,14 +1,14 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Bill, User, UserRole, BillStatus, BillType } from './types.ts';
-import { COMPANIES, INITIAL_USERS } from './constants.tsx';
-import { storage } from './storage.ts';
-import Layout from './components/Layout.tsx';
-import Dashboard from './components/Dashboard.tsx';
-import BillList from './components/BillList.tsx';
-import Scanner from './components/Scanner.tsx';
-import AdminPanel from './components/AdminPanel.tsx';
-import Assistant from './components/Assistant.tsx';
+import { Bill, User, UserRole, BillStatus, BillType } from './types';
+import { COMPANIES, INITIAL_USERS } from './constants';
+import { storage } from './storage';
+import Layout from './components/Layout';
+import Dashboard from './components/Dashboard';
+import BillList from './components/BillList';
+import Scanner from './components/Scanner';
+import AdminPanel from './components/AdminPanel';
+import Assistant from './components/Assistant';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');

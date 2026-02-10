@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { User, Company, UserRole } from './types.ts';
+import { User, Company, UserRole } from './types';
 import { LayoutDashboard, ReceiptText, ShieldCheck, Camera, Sparkles } from 'lucide-react';
 
 export const COMPANIES: Company[] = [
