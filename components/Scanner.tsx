@@ -24,28 +24,27 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const actualMimeType = file.type;
+    const actualMimeType = file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
     const isPdf = actualMimeType === 'application/pdf';
-    setFileType(isPdf ? 'pdf' : 'image');
     
+    setFileType(isPdf ? 'pdf' : 'image');
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setIsManual(false);
+
     if (isPdf) {
       setPreviewUrl(null);
     } else {
       setPreviewUrl(URL.createObjectURL(file));
     }
-    
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    setIsManual(false);
 
     try {
       const reader = new FileReader();
       reader.onload = async () => {
         const base64 = reader.result as string;
         try {
-          // Passamos o MIME type real detectado pelo navegador
-          const data = await processBillDocument(base64, actualMimeType || (isPdf ? 'application/pdf' : 'image/jpeg'));
+          const data = await processBillDocument(base64, actualMimeType);
           
           setResult({
             beneficiary: data.beneficiary || 'Documento Lido',
@@ -54,19 +53,18 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
             category: data.category || 'Outros'
           });
         } catch (err: any) {
-          setError(err.message || 'Erro ao processar o arquivo. Tente novamente com uma imagem mais nítida ou PDF original.');
-          console.error("Scanner Error:", err);
+          setError(err.message || 'Erro ao processar o arquivo. Certifique-se que o documento é legível.');
         } finally {
           setLoading(false);
         }
       };
       reader.onerror = () => {
-        setError("Erro ao ler o arquivo localmente.");
+        setError("Erro ao ler arquivo.");
         setLoading(false);
       };
       reader.readAsDataURL(file);
     } catch (err) {
-      setError('Falha inesperada no seletor de arquivos.');
+      setError('Erro no seletor de arquivos.');
       setLoading(false);
     }
   };
@@ -91,7 +89,7 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
   const confirmBill = () => {
     if (!result) return;
     if (!result.beneficiary || !result.dueDate) {
-      alert('Por favor, verifique o beneficiário e a data.');
+      alert('Preencha os campos obrigatórios.');
       return;
     }
 
@@ -115,24 +113,19 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
       {!result && !isManual ? (
         <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-xl text-center animate-scale-in">
           {loading ? (
-            <div className="mb-6 relative h-48 flex flex-col items-center justify-center bg-slate-50 rounded-2xl overflow-hidden border-2 border-dashed border-blue-100">
-              {previewUrl && (
-                <img src={previewUrl} className="absolute inset-0 w-full h-full object-cover opacity-10 grayscale" alt="Preview" />
-              )}
-              <div className="relative z-10 flex flex-col items-center">
-                 <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
-                 <p className="text-sm font-black text-blue-700 uppercase tracking-widest">Processando {fileType?.toUpperCase()}...</p>
-                 <p className="text-[10px] text-slate-400 mt-2 font-bold px-6">Extraindo dados com Gemini 3 Pro Vision</p>
-              </div>
+            <div className="mb-6 h-48 flex flex-col items-center justify-center bg-slate-50 rounded-2xl border-2 border-dashed border-blue-200">
+              <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
+              <p className="text-sm font-black text-blue-700 uppercase tracking-widest">IA Analisando {fileType?.toUpperCase()}</p>
+              <p className="text-[10px] text-slate-400 mt-2 font-bold">Extração Gemini 3 Pro Vision</p>
             </div>
           ) : (
-            <div className="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-6 transition-transform hover:rotate-3 shadow-inner">
+            <div className="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner">
               <Camera className="w-10 h-10 text-blue-600" />
             </div>
           )}
           
           <h2 className="text-2xl font-bold text-slate-800 mb-2">Novo Lançamento</h2>
-          <p className="text-slate-500 mb-8 text-sm px-4">Tire uma foto nítida ou anexe o arquivo PDF original da fatura.</p>
+          <p className="text-slate-500 mb-8 text-sm px-4 text-balance">Escaneie um boleto ou anexe um arquivo PDF de cobrança.</p>
 
           <input 
             type="file" 
@@ -146,17 +139,17 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
             <button 
               onClick={() => fileInputRef.current?.click()}
               disabled={loading}
-              className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold flex items-center justify-center space-x-3 active:scale-95 transition-all disabled:opacity-50 shadow-lg shadow-blue-100"
+              className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold flex items-center justify-center space-x-3 active:scale-95 transition-all disabled:opacity-50"
             >
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
-              <span>{loading ? 'Analisando documento...' : 'Foto ou PDF'}</span>
+              <span>{loading ? 'Processando...' : 'Foto ou PDF'}</span>
             </button>
             
             <div className="grid grid-cols-2 gap-3">
               <button 
                 onClick={() => fileInputRef.current?.click()}
                 disabled={loading}
-                className="py-4 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-2xl font-bold flex items-center justify-center space-x-2 active:scale-95 transition-all disabled:opacity-50"
+                className="py-4 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-2xl font-bold flex items-center justify-center space-x-2 active:scale-95 transition-all"
               >
                 <Upload className="w-4 h-4" />
                 <span className="text-sm">Arquivos</span>
@@ -173,80 +166,51 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
             </div>
           </div>
           
-          <div className="mt-8 flex items-center justify-center gap-4">
-            <div className="flex flex-col items-center">
-              <div className="p-2 bg-emerald-50 rounded-lg mb-1"><CheckCircle className="w-4 h-4 text-emerald-600" /></div>
-              <span className="text-[8px] font-bold text-slate-400">BOLETOS</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <div className="p-2 bg-emerald-50 rounded-lg mb-1"><CheckCircle className="w-4 h-4 text-emerald-600" /></div>
-              <span className="text-[8px] font-bold text-slate-400">FATURAS</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <div className="p-2 bg-emerald-50 rounded-lg mb-1"><CheckCircle className="w-4 h-4 text-emerald-600" /></div>
-              <span className="text-[8px] font-bold text-slate-400">PDFs</span>
-            </div>
+          <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-center gap-4">
+             <div className="bg-slate-50 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                <FileText className="w-3 h-3 text-red-500" />
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-tight">Suporte PDF</span>
+             </div>
+             <div className="bg-slate-50 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                <ImageIcon className="w-3 h-3 text-blue-500" />
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-tight">Suporte Foto</span>
+             </div>
           </div>
         </div>
       ) : null}
 
       {error && (
-        <div className="bg-red-50 p-6 rounded-3xl border border-red-100 flex flex-col items-center space-y-4 text-red-700 text-center animate-slide-down shadow-md">
-          <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center">
-            <XCircle className="w-8 h-8 text-red-500" />
-          </div>
+        <div className="bg-red-50 p-6 rounded-3xl border border-red-100 flex flex-col items-center space-y-4 text-red-700 text-center animate-slide-down">
+          <XCircle className="w-10 h-10 text-red-500" />
           <div>
-            <p className="font-bold text-base">Falha na Leitura</p>
-            <p className="text-xs opacity-90 mt-2 max-w-[240px] leading-relaxed">{error}</p>
+            <p className="font-bold">Falha na Leitura</p>
+            <p className="text-xs opacity-90 mt-1">{error}</p>
           </div>
           <button 
-            onClick={() => { setError(null); setPreviewUrl(null); setFileType(null); }}
-            className="w-full bg-red-600 text-white py-3 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-red-200 active:scale-95 transition-all"
+            onClick={() => { setError(null); setLoading(false); }}
+            className="w-full bg-red-600 text-white py-3 rounded-2xl text-xs font-black uppercase tracking-widest"
           >
-            Tentar novamente
+            Tentar Novamente
           </button>
         </div>
       )}
 
       {(result || isManual) && (
         <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-xl animate-slide-up relative overflow-hidden">
-          {previewUrl && !isManual && (
-            <div className="mb-4 -mx-6 -mt-6 h-32 relative group">
-              <img src={previewUrl} className="w-full h-full object-cover" alt="Preview" />
-              <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-transparent"></div>
-              <div className="absolute top-4 left-4 bg-white/95 backdrop-blur px-2 py-1 rounded-lg text-[9px] font-black text-slate-800 shadow-sm flex items-center gap-1 border border-slate-100">
-                <ImageIcon className="w-3 h-3 text-blue-600" />
-                DOC CAPTURADO
+          {!isManual && (
+             <div className="mb-4 -mx-6 -mt-6 h-32 bg-slate-50 flex flex-col items-center justify-center space-y-1">
+               {previewUrl ? (
+                 <img src={previewUrl} className="w-full h-full object-cover opacity-60" alt="Preview" />
+               ) : (
+                 <FileSearch className="w-12 h-12 text-blue-200" />
+               )}
+               <div className="absolute top-4 left-4 bg-blue-600 px-3 py-1 rounded-full text-[9px] font-black text-white shadow-lg">
+                DADOS EXTRAÍDOS PELA IA
               </div>
             </div>
           )}
 
-          {!previewUrl && fileType === 'pdf' && !isManual && (
-            <div className="mb-4 -mx-6 -mt-6 h-32 bg-slate-50 flex flex-col items-center justify-center space-y-1 relative">
-               <FileText className="w-12 h-12 text-blue-200" />
-               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Documento PDF Carregado</p>
-               <div className="absolute top-4 left-4 bg-blue-600 px-2 py-1 rounded-lg text-[9px] font-black text-white shadow-sm flex items-center gap-1">
-                <FileSearch className="w-3 h-3" />
-                OCR ATIVO
-              </div>
-            </div>
-          )}
-
-          <div className="absolute top-0 right-0 p-3 pt-4 pr-4">
-            {!isManual ? (
-              <div className="bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center space-x-1 animate-fade-in shadow-sm border border-emerald-100">
-                <CheckCircle className="w-3 h-3" />
-                <span>IA PRO-3</span>
-              </div>
-            ) : (
-              <div className="bg-blue-50 text-blue-600 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center space-x-1 animate-fade-in shadow-sm border border-blue-100">
-                <PencilLine className="w-3 h-3" />
-                <span>MANUAL</span>
-              </div>
-            )}
-          </div>
-
-          <h3 className="text-lg font-bold text-slate-800 mb-6 mt-2">{isManual ? 'Novo Lançamento' : 'Revisar Dados'}</h3>
+          <h3 className="text-lg font-bold text-slate-800 mb-6">{isManual ? 'Lançamento Manual' : 'Verificar Lançamento'}</h3>
           
           <div className="space-y-4">
             <div>
@@ -254,7 +218,7 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
               <select 
                 value={selectedUnit}
                 onChange={(e) => setSelectedUnit(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:ring-2 ring-blue-500/20 outline-none transition-all"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none"
               >
                 {accessibleUnits.map(id => (
                   <option key={id} value={id}>{COMPANIES.find(c => c.id === id)?.name}</option>
@@ -266,10 +230,9 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
               <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Beneficiário</label>
               <input 
                 type="text" 
-                placeholder="Nome do fornecedor"
                 value={result?.beneficiary} 
                 onChange={e => updateField('beneficiary', e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 ring-blue-500/20 outline-none transition-all"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold"
               />
             </div>
 
@@ -280,7 +243,7 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
                   type="date" 
                   value={result?.dueDate} 
                   onChange={e => updateField('dueDate', e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 ring-blue-500/20 outline-none transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold"
                 />
               </div>
               <div>
@@ -288,10 +251,9 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
                 <input 
                   type="number" 
                   step="0.01"
-                  placeholder="0,00"
                   value={result?.amount || ''} 
                   onChange={e => updateField('amount', parseFloat(e.target.value))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-black text-slate-900 focus:ring-2 ring-blue-500/20 outline-none transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-black text-slate-900"
                 />
               </div>
             </div>
@@ -301,7 +263,7 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
               <select 
                 value={result?.category}
                 onChange={(e) => updateField('category', e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 ring-blue-500/20 outline-none transition-all"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold"
               >
                 {CATEGORIES.map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
@@ -311,20 +273,15 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
 
             <button 
               onClick={confirmBill}
-              className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-100 active:scale-95 transition-all flex items-center justify-center space-x-2 mt-4"
+              className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-100 flex items-center justify-center space-x-2 mt-4"
             >
               <CheckCircle className="w-5 h-5" />
               <span>Confirmar Lançamento</span>
             </button>
             
             <button 
-              onClick={() => {
-                setResult(null);
-                setIsManual(false);
-                setPreviewUrl(null);
-                setFileType(null);
-              }}
-              className="w-full py-2 text-slate-400 text-[10px] font-black uppercase tracking-widest hover:text-red-500 transition-colors"
+              onClick={() => { setResult(null); setIsManual(false); setPreviewUrl(null); }}
+              className="w-full py-2 text-slate-400 text-[10px] font-black uppercase tracking-widest"
             >
               Cancelar
             </button>
