@@ -9,6 +9,7 @@ import BillList from './components/BillList';
 import Scanner from './components/Scanner';
 import AdminPanel from './components/AdminPanel';
 import Assistant from './components/Assistant';
+import { Key, ShieldAlert, CheckCircle } from 'lucide-react';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -16,16 +17,38 @@ const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<'default' | 'granted' | 'denied'>('default');
 
   useEffect(() => {
+    const checkKey = async () => {
+      if (window.aistudio) {
+        const selected = await window.aistudio.hasSelectedApiKey();
+        setHasApiKey(selected);
+      } else {
+        // Se não houver aistudio, assumimos que a chave vem via process.env padrão
+        setHasApiKey(true);
+      }
+    };
+    checkKey();
+  }, []);
+
+  const handleSelectKey = async () => {
+    if (window.aistudio) {
+      await window.aistudio.openSelectKey();
+      setHasApiKey(true); // Assume sucesso conforme diretrizes
+    }
+  };
+
+  useEffect(() => {
+    if (hasApiKey === false) return; // Aguarda seleção de chave
+
     const initApp = () => {
       try {
         const savedBills = storage.getBills();
         const savedUsers = storage.getUsers();
         const savedCurrent = storage.getCurrentUser();
 
-        // Inicializa usuários
         if (savedUsers && savedUsers.length > 0) {
           setUsers(savedUsers);
         } else {
@@ -33,16 +56,14 @@ const App: React.FC = () => {
           storage.setUsers(INITIAL_USERS);
         }
 
-        // Inicializa contas
         if (savedBills && savedBills.length > 0) {
           setBills(savedBills);
         }
 
-        // Inicializa usuário atual com fallback agressivo para não travar em tela branca
         if (savedCurrent && savedCurrent.id) {
           setCurrentUser(savedCurrent);
         } else {
-          const admin = INITIAL_USERS[0]; // Maurício Admin
+          const admin = INITIAL_USERS[0];
           setCurrentUser(admin);
           storage.setCurrentUser(admin);
         }
@@ -52,7 +73,6 @@ const App: React.FC = () => {
         }
       } catch (err) {
         console.error("Erro crítico na inicialização:", err);
-        // Fallback total em caso de erro de parse de JSON ou storage
         setCurrentUser(INITIAL_USERS[0]);
       } finally {
         setIsLoaded(true);
@@ -60,7 +80,7 @@ const App: React.FC = () => {
     };
 
     initApp();
-  }, []);
+  }, [hasApiKey]);
 
   const checkUpcomingBills = useCallback(() => {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
@@ -114,19 +134,13 @@ const App: React.FC = () => {
       amount: billData.amount || 0,
       dueDate: billData.dueDate || new Date().toISOString().split('T')[0],
       category: billData.category || 'Outros',
-      status: billStatusMap(billData.dueDate || ''),
+      status: BillStatus.PENDING,
       companyId: billData.companyId || COMPANIES[0].id,
       type: billData.type || BillType.SINGLE,
       createdAt: new Date().toISOString()
     } as Bill;
     setBills(prev => [newBill, ...prev]);
     setActiveTab('bills');
-  };
-
-  const billStatusMap = (dueDate: string) => {
-    if (!dueDate) return BillStatus.PENDING;
-    const today = new Date().toISOString().split('T')[0];
-    return dueDate < today ? BillStatus.PENDING : BillStatus.PENDING; // Mantemos como pendente, a lógica de "Vencido" é visual na UI
   };
 
   const updateBillStatus = (id: string, status: BillStatus) => {
@@ -143,12 +157,38 @@ const App: React.FC = () => {
     setNotificationPermission(permission as any);
   };
 
+  // Tela de Seleção de Chave (Obrigatória para Gemini 3 em alguns ambientes)
+  if (hasApiKey === false) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+        <div className="max-w-sm w-full bg-white p-8 rounded-3xl shadow-xl border border-slate-100 text-center animate-scale-in">
+          <div className="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <Key className="w-10 h-10 text-blue-600" />
+          </div>
+          <h2 className="text-2xl font-black text-slate-800 mb-2">Configuração Necessária</h2>
+          <p className="text-slate-500 text-sm mb-8">Para habilitar a leitura de PDFs e IA, você precisa selecionar uma chave de API válida.</p>
+          
+          <button 
+            onClick={handleSelectKey}
+            className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-100 active:scale-95 transition-all flex items-center justify-center space-x-2"
+          >
+            <span>Selecionar API Key</span>
+          </button>
+          
+          <p className="mt-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+            Requer faturamento ativo no <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-blue-500 underline">Google Cloud</a>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (!isLoaded || !currentUser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center">
           <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-slate-400 text-[10px] mt-4 font-black uppercase tracking-[0.2em]">Carregando ContasPro</p>
+          <p className="text-slate-400 text-[10px] mt-4 font-black uppercase tracking-[0.2em]">Inicializando ContasPro...</p>
         </div>
       </div>
     );

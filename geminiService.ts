@@ -3,16 +3,15 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { OCRResult, Bill } from "./types";
 
 export const processBillDocument = async (base64Data: string, mimeType: string = 'image/jpeg'): Promise<OCRResult> => {
-  // Inicializa o cliente usando a variável de ambiente injetada
+  // Criar instância logo antes da chamada para garantir que use a API Key atual
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // Limpa o prefixo do base64 para garantir que apenas os dados binários sejam enviados
   const dataParts = base64Data.split('base64,');
   const cleanData = dataParts.length > 1 ? dataParts[1] : dataParts[0];
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // Modelo Pro é essencial para OCR de alta precisão em PDFs
+      model: 'gemini-3-flash-preview', // Flash 3 é excelente para OCR e mais resiliente em limites de quota
       contents: {
         parts: [
           {
@@ -22,20 +21,16 @@ export const processBillDocument = async (base64Data: string, mimeType: string =
             },
           },
           {
-            text: `Você é um sistema de OCR de alta precisão especializado em documentos financeiros brasileiros. 
-            Analise este documento (que pode ser uma imagem ou um PDF) e extraia os seguintes dados:
+            text: `Aja como um motor de OCR financeiro avançado para o mercado brasileiro. 
+            Analise este documento (imagem ou PDF) e extraia os dados para o Contas a Pagar.
             
-            1. BENEFICIÁRIO: Nome da empresa emissora (ex: concessionária de energia, fornecedor, banco).
-            2. VALOR: O valor total final do documento. Use ponto para decimais (ex: 1500.50).
-            3. VENCIMENTO: A data de vencimento no formato ISO (YYYY-MM-DD).
-            4. CATEGORIA: Classifique em (Energia, Água, Internet, Aluguel, Fornecedores, Impostos, Salários, Manutenção, Outros).
+            DIRETRIZES:
+            - BENEFICIÁRIO: Nome da empresa emissora da conta.
+            - VALOR: Procure por 'Total a Pagar', 'Valor do Documento' ou somas finais. Use ponto para decimais (ex: 150.75).
+            - VENCIMENTO: Data limite de pagamento no formato ISO YYYY-MM-DD.
+            - CATEGORIA: Escolha entre (Energia, Água, Internet, Aluguel, Fornecedores, Impostos, Salários, Manutenção, Outros).
 
-            INSTRUÇÕES ESPECÍFICAS PARA BOLETOS:
-            - Procure por "Valor do Documento" ou "Valor Cobrado".
-            - Procure por "Data de Vencimento".
-            - Se for um PDF multi-página, analise todas as partes para encontrar o resumo financeiro.
-            
-            Responda exclusivamente em formato JSON.`
+            Retorne estritamente um JSON.`
           }
         ]
       },
@@ -44,10 +39,10 @@ export const processBillDocument = async (base64Data: string, mimeType: string =
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            beneficiary: { type: Type.STRING, description: "Nome do beneficiário" },
-            amount: { type: Type.NUMBER, description: "Valor numérico" },
-            dueDate: { type: Type.STRING, description: "Data ISO YYYY-MM-DD" },
-            category: { type: Type.STRING, description: "Categoria sugerida" }
+            beneficiary: { type: Type.STRING },
+            amount: { type: Type.NUMBER },
+            dueDate: { type: Type.STRING },
+            category: { type: Type.STRING }
           },
           required: ['beneficiary', 'amount', 'dueDate', 'category']
         }
@@ -56,56 +51,49 @@ export const processBillDocument = async (base64Data: string, mimeType: string =
 
     const result = JSON.parse(response.text || '{}');
     
-    // Tratamento de segurança para datas caso venham fora do padrão
+    // Fallback de data para evitar erros de salvamento
     if (result.dueDate && result.dueDate.includes('/')) {
-      const p = result.dueDate.split('/');
-      if (p.length === 3) {
-        result.dueDate = `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`;
-      }
+      const parts = result.dueDate.split('/');
+      if (parts.length === 3) result.dueDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
     }
 
     return result as OCRResult;
-  } catch (error) {
-    console.error("Erro crítico no processamento Gemini:", error);
-    throw new Error("A IA não conseguiu ler este documento. Tente uma foto mais clara ou o PDF original.");
+  } catch (error: any) {
+    console.error("Erro Gemini OCR:", error);
+    
+    // Se o erro for de chave não encontrada, podemos alertar o usuário
+    if (error.message?.includes("Requested entity was not found")) {
+      throw new Error("Erro de configuração da API Key. Por favor, reinicie a sessão e selecione a chave novamente.");
+    }
+    
+    throw new Error("Não foi possível processar o arquivo. Verifique se o documento está legível e tente novamente.");
   }
 };
 
 export const chatWithFinancialAssistant = async (query: string, bills: Bill[]): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const context = bills.map(b => ({
-    b: b.beneficiary,
-    v: b.amount,
-    d: b.dueDate,
-    s: b.status,
-    c: b.category
-  }));
+  const context = bills.map(b => ({ b: b.beneficiary, v: b.amount, d: b.dueDate, c: b.category, s: b.status }));
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
-    contents: [
-      {
-        role: 'user',
-        parts: [{ text: `Contas Atuais: ${JSON.stringify(context)}. Pergunta: ${query}` }]
-      }
-    ],
+    model: 'gemini-3-flash-preview',
+    contents: [{ role: 'user', parts: [{ text: `Contas: ${JSON.stringify(context)}. Pergunta: ${query}` }] }],
     config: {
-      systemInstruction: 'Você é um consultor financeiro corporativo. Responda de forma curta e objetiva em Português.'
+      systemInstruction: 'Você é o consultor financeiro IA da ContasPro. Seja breve, direto e use Português do Brasil.'
     }
   });
 
-  return response.text || "Não foi possível gerar uma resposta agora.";
+  return response.text || "Sem resposta no momento.";
 };
 
 export const getDashboardInsight = async (bills: Bill[]): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const pending = bills.filter(b => b.status === 'PENDING').slice(0, 5);
-  if (pending.length === 0) return "Excelente! Todas as contas estão em dia.";
+  if (pending.length === 0) return "Tudo em ordem por aqui!";
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Analise as pendências: ${JSON.stringify(pending)}. Dê um conselho financeiro de no máximo 15 palavras.`
+    contents: `Contas: ${JSON.stringify(pending)}. Dê 1 conselho rápido.`
   });
 
-  return response.text || "Acompanhe seus vencimentos para evitar multas.";
+  return response.text || "Continue monitorando seus prazos.";
 };
