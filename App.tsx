@@ -9,7 +9,17 @@ import BillList from './components/BillList';
 import Scanner from './components/Scanner';
 import AdminPanel from './components/AdminPanel';
 import Assistant from './components/Assistant';
-import { Key, ShieldAlert, CheckCircle } from 'lucide-react';
+import { Key } from 'lucide-react';
+
+// Proper global declaration for aistudio to avoid TS2339 and handle potential environment conflicts
+declare global {
+  interface Window {
+    aistudio?: {
+      hasSelectedApiKey: () => Promise<boolean>;
+      openSelectKey: () => Promise<void>;
+    };
+  }
+}
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -20,13 +30,20 @@ const App: React.FC = () => {
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<'default' | 'granted' | 'denied'>('default');
 
+  // Check if API key is already selected on mount
   useEffect(() => {
     const checkKey = async () => {
-      if (window.aistudio) {
-        const selected = await window.aistudio.hasSelectedApiKey();
-        setHasApiKey(selected);
+      const aistudio = window.aistudio;
+      if (aistudio) {
+        try {
+          const selected = await aistudio.hasSelectedApiKey();
+          setHasApiKey(selected);
+        } catch (e) {
+          console.debug("Erro ao verificar chave:", e);
+          setHasApiKey(false);
+        }
       } else {
-        // Se não houver aistudio, assumimos que a chave vem via process.env padrão
+        // If aistudio is not present, assume key is provided via standard process.env (e.g., local dev)
         setHasApiKey(true);
       }
     };
@@ -34,14 +51,22 @@ const App: React.FC = () => {
   }, []);
 
   const handleSelectKey = async () => {
-    if (window.aistudio) {
-      await window.aistudio.openSelectKey();
-      setHasApiKey(true); // Assume sucesso conforme diretrizes
+    const aistudio = window.aistudio;
+    if (aistudio) {
+      try {
+        await aistudio.openSelectKey();
+        // Mandatory: Assume successful selection and proceed to avoid race condition
+        setHasApiKey(true); 
+      } catch (e) {
+        console.error("Erro ao abrir seletor de chave:", e);
+      }
     }
   };
 
+  // App initialization logic
   useEffect(() => {
-    if (hasApiKey === false) return; // Aguarda seleção de chave
+    // Only proceed if key state is resolved and positive
+    if (hasApiKey !== true) return;
 
     const initApp = () => {
       try {
@@ -157,7 +182,10 @@ const App: React.FC = () => {
     setNotificationPermission(permission as any);
   };
 
-  // Tela de Seleção de Chave (Obrigatória para Gemini 3 em alguns ambientes)
+  // Logic to handle "Requested entity was not found" error globally if needed
+  // For now, it's handled via the UI in Scanner/Assistant, but we could add a window listener here
+
+  // Blocking screen if API Key is not yet selected in an environment that requires it
   if (hasApiKey === false) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
@@ -165,30 +193,33 @@ const App: React.FC = () => {
           <div className="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
             <Key className="w-10 h-10 text-blue-600" />
           </div>
-          <h2 className="text-2xl font-black text-slate-800 mb-2">Configuração Necessária</h2>
-          <p className="text-slate-500 text-sm mb-8">Para habilitar a leitura de PDFs e IA, você precisa selecionar uma chave de API válida.</p>
+          <h2 className="text-2xl font-black text-slate-800 mb-2">Configuração da IA</h2>
+          <p className="text-slate-500 text-sm mb-8 leading-relaxed">
+            Para habilitar o scanner de boletos e o assistente financeiro, selecione uma chave de API válida de um projeto faturado.
+          </p>
           
           <button 
             onClick={handleSelectKey}
             className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-100 active:scale-95 transition-all flex items-center justify-center space-x-2"
           >
-            <span>Selecionar API Key</span>
+            <span>Configurar API Key</span>
           </button>
           
-          <p className="mt-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-            Requer faturamento ativo no <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-blue-500 underline">Google Cloud</a>
+          <p className="mt-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-relaxed px-4">
+            Saiba mais em <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-blue-500 underline">ai.google.dev/billing</a>
           </p>
         </div>
       </div>
     );
   }
 
+  // Loading state
   if (!isLoaded || !currentUser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center">
           <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-slate-400 text-[10px] mt-4 font-black uppercase tracking-[0.2em]">Inicializando ContasPro...</p>
+          <p className="text-slate-400 text-[10px] mt-4 font-black uppercase tracking-[0.2em]">Carregando ContasPro...</p>
         </div>
       </div>
     );
