@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Bill, BillStatus } from '../types';
-import { Search, MoreVertical, Calendar, Landmark, CheckCircle, Clock, AlertTriangle, ReceiptText, Check, Tag } from 'lucide-react';
+import { Search, MoreVertical, Calendar, CheckCircle, Clock, AlertTriangle, ReceiptText, Check, Tag } from 'lucide-react';
 import { COMPANIES } from '../constants';
 
 interface BillListProps {
@@ -32,8 +32,7 @@ const BillList: React.FC<BillListProps> = ({ bills, onStatusChange, accessibleUn
   };
 
   return (
-    <div className="space-y-4 animate-fade-in pb-20">
-      {/* Search and Filters Header */}
+    <div className="space-y-4 animate-fade-in pb-24">
       <div className="sticky top-0 bg-slate-50/95 backdrop-blur-md pt-2 pb-4 z-30 space-y-3 -mx-4 px-4 border-b border-slate-100">
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
@@ -62,7 +61,6 @@ const BillList: React.FC<BillListProps> = ({ bills, onStatusChange, accessibleUn
         </div>
       </div>
 
-      {/* Bill Cards */}
       <div className="space-y-3">
         {filteredBills.map((bill, i) => {
           const isMarking = markingId === bill.id;
@@ -73,15 +71,13 @@ const BillList: React.FC<BillListProps> = ({ bills, onStatusChange, accessibleUn
             <div 
               key={bill.id} 
               className={`relative bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden transition-all duration-300
-                ${isMarking ? 'bill-card-success scale-[1.01] z-10 shadow-emerald-100' : 'animate-slide-up'}
+                ${isMarking ? 'bill-card-success scale-[1.01] z-10' : 'animate-slide-up'}
                 ${!isMarking && markingId !== null ? 'opacity-40 grayscale-[0.5]' : ''}`}
               style={{ animationDelay: `${i * 0.05}s` }}
             >
-              {/* Company Sidebar Indicator */}
               <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${company?.color}`} />
               
               <div className="p-4 grid grid-cols-[1fr_auto] gap-x-2 gap-y-3">
-                {/* Column 1: Info Area */}
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 mb-0.5">
                     <span className={`w-2 h-2 rounded-full ${company?.color} shrink-0`} />
@@ -98,7 +94,6 @@ const BillList: React.FC<BillListProps> = ({ bills, onStatusChange, accessibleUn
                   </div>
                 </div>
 
-                {/* Column 2: Value Area */}
                 <div className="text-right flex flex-col items-end">
                   <p className={`text-base font-black tracking-tighter ${isMarking ? 'text-emerald-600' : 'text-slate-900'}`}>
                     R$ {bill.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -113,7 +108,6 @@ const BillList: React.FC<BillListProps> = ({ bills, onStatusChange, accessibleUn
                   </div>
                 </div>
 
-                {/* Row 2: Secondary Info & Actions (Full Width) */}
                 <div className="col-span-2 flex items-center justify-between pt-3 border-t border-slate-50 mt-1">
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-xl border border-slate-100">

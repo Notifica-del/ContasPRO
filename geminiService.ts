@@ -41,7 +41,6 @@ export const processBillImage = async (base64Image: string): Promise<OCRResult> 
 };
 
 export const chatWithFinancialAssistant = async (query: string, bills: Bill[]): Promise<string> => {
-  // Criamos um contexto simplificado das contas para o modelo
   const context = bills.map(b => ({
     empresa: b.beneficiary,
     valor: b.amount,

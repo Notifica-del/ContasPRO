@@ -19,41 +19,47 @@ const App: React.FC = () => {
   const [notificationPermission, setNotificationPermission] = useState<'default' | 'granted' | 'denied'>('default');
 
   useEffect(() => {
-    try {
-      const savedBills = storage.getBills();
-      const savedUsers = storage.getUsers();
-      const savedCurrent = storage.getCurrentUser();
+    const initApp = () => {
+      try {
+        const savedBills = storage.getBills();
+        const savedUsers = storage.getUsers();
+        const savedCurrent = storage.getCurrentUser();
 
-      if (savedUsers && savedUsers.length > 0) {
-        setUsers(savedUsers);
-      } else {
-        setUsers(INITIAL_USERS);
-        storage.setUsers(INITIAL_USERS);
-      }
+        // Inicializa usuários
+        if (savedUsers && savedUsers.length > 0) {
+          setUsers(savedUsers);
+        } else {
+          setUsers(INITIAL_USERS);
+          storage.setUsers(INITIAL_USERS);
+        }
 
-      if (savedBills && savedBills.length > 0) {
-        setBills(savedBills);
-      }
+        // Inicializa contas
+        if (savedBills && savedBills.length > 0) {
+          setBills(savedBills);
+        }
 
-      if (savedCurrent) {
-        setCurrentUser(savedCurrent);
-      } else {
-        const admin = INITIAL_USERS.find(u => u.role === UserRole.ADMIN);
-        if (admin) {
+        // Inicializa usuário atual com fallback agressivo para não travar em tela branca
+        if (savedCurrent && savedCurrent.id) {
+          setCurrentUser(savedCurrent);
+        } else {
+          const admin = INITIAL_USERS[0]; // Maurício Admin
           setCurrentUser(admin);
           storage.setCurrentUser(admin);
         }
-      }
 
-      if (typeof window !== 'undefined' && 'Notification' in window) {
-        setNotificationPermission(Notification.permission as any);
+        if (typeof window !== 'undefined' && 'Notification' in window) {
+          setNotificationPermission(Notification.permission as any);
+        }
+      } catch (err) {
+        console.error("Erro crítico na inicialização:", err);
+        // Fallback total em caso de erro de parse de JSON ou storage
+        setCurrentUser(INITIAL_USERS[0]);
+      } finally {
+        setIsLoaded(true);
       }
-    } catch (err) {
-      console.error("Erro na inicialização:", err);
-    }
+    };
 
-    const timer = setTimeout(() => setIsLoaded(true), 600);
-    return () => clearTimeout(timer);
+    initApp();
   }, []);
 
   const checkUpcomingBills = useCallback(() => {
@@ -94,16 +100,10 @@ const App: React.FC = () => {
   }, [isLoaded, checkUpcomingBills]);
 
   useEffect(() => {
-    if (isLoaded) {
+    if (isLoaded && currentUser) {
       storage.setBills(bills);
       storage.setUsers(users);
-      if (currentUser) {
-        const updated = users.find(u => u.id === currentUser.id);
-        if (updated) {
-          setCurrentUser(updated);
-          storage.setCurrentUser(updated);
-        }
-      }
+      storage.setCurrentUser(currentUser);
     }
   }, [bills, users, isLoaded, currentUser]);
 
@@ -114,13 +114,19 @@ const App: React.FC = () => {
       amount: billData.amount || 0,
       dueDate: billData.dueDate || new Date().toISOString().split('T')[0],
       category: billData.category || 'Outros',
-      status: billData.status || BillStatus.PENDING,
+      status: billStatusMap(billData.dueDate || ''),
       companyId: billData.companyId || COMPANIES[0].id,
       type: billData.type || BillType.SINGLE,
       createdAt: new Date().toISOString()
     } as Bill;
     setBills(prev => [newBill, ...prev]);
     setActiveTab('bills');
+  };
+
+  const billStatusMap = (dueDate: string) => {
+    if (!dueDate) return BillStatus.PENDING;
+    const today = new Date().toISOString().split('T')[0];
+    return dueDate < today ? BillStatus.PENDING : BillStatus.PENDING; // Mantemos como pendente, a lógica de "Vencido" é visual na UI
   };
 
   const updateBillStatus = (id: string, status: BillStatus) => {
@@ -141,8 +147,8 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-slate-400 text-sm mt-4 font-bold uppercase tracking-widest">ContasPro</p>
+          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-slate-400 text-[10px] mt-4 font-black uppercase tracking-[0.2em]">Carregando ContasPro</p>
         </div>
       </div>
     );
