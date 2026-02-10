@@ -2,9 +2,20 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { OCRResult, Bill } from "./types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Função para obter o cliente AI de forma segura
+const getAIClient = () => {
+  // Tenta obter a chave do process.env injetado pelo Vite
+  const apiKey = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : undefined;
+  
+  if (!apiKey) {
+    console.warn("Atenção: API_KEY não configurada. Funcionalidades de IA podem falhar.");
+  }
+  
+  return new GoogleGenAI({ apiKey: apiKey || 'missing-api-key' });
+};
 
 export const processBillImage = async (base64Image: string): Promise<OCRResult> => {
+  const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: {
@@ -41,6 +52,7 @@ export const processBillImage = async (base64Image: string): Promise<OCRResult> 
 };
 
 export const chatWithFinancialAssistant = async (query: string, bills: Bill[]): Promise<string> => {
+  const ai = getAIClient();
   const context = bills.map(b => ({
     empresa: b.beneficiary,
     valor: b.amount,
@@ -66,6 +78,7 @@ export const chatWithFinancialAssistant = async (query: string, bills: Bill[]): 
 };
 
 export const getDashboardInsight = async (bills: Bill[]): Promise<string> => {
+  const ai = getAIClient();
   const pending = bills.filter(b => b.status === 'PENDING');
   if (pending.length === 0) return "Tudo em dia! Nenhuma conta pendente no momento.";
 
