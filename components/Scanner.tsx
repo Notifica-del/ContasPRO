@@ -1,9 +1,9 @@
 
 import React, { useState, useRef } from 'react';
 import { Camera, Upload, Loader2, CheckCircle, XCircle, PencilLine, Keyboard } from 'lucide-react';
-import { processBillImage } from '../geminiService';
-import { OCRResult, Bill, BillType, BillStatus } from '../types';
-import { CATEGORIES, COMPANIES } from '../constants';
+import { processBillImage } from '../geminiService.ts';
+import { OCRResult, Bill, BillType, BillStatus } from '../types.ts';
+import { CATEGORIES, COMPANIES } from '../constants.tsx';
 
 interface ScannerProps {
   onAddBill: (bill: Partial<Bill>) => void;
@@ -29,12 +29,10 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
 
     try {
       const reader = new FileReader();
-      reader.readAsDataURL(file);
       reader.onload = async () => {
         const base64 = reader.result as string;
         try {
           const data = await processBillImage(base64);
-          // Normaliza a data para garantir que o input[type="date"] funcione
           if (data.dueDate && data.dueDate.includes('/')) {
             const parts = data.dueDate.split('/');
             if (parts.length === 3) {
@@ -49,6 +47,7 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
           setLoading(false);
         }
       };
+      reader.readAsDataURL(file);
     } catch (err) {
       setError('Erro ao processar imagem.');
       setLoading(false);
@@ -72,7 +71,6 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
 
   const confirmBill = () => {
     if (!result) return;
-    
     if (!result.beneficiary || !result.dueDate || !result.amount) {
       alert('Por favor, preencha todos os campos obrigatórios.');
       return;
@@ -89,7 +87,6 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
     });
     setResult(null);
     setIsManual(false);
-    alert('Conta lançada com sucesso!');
   };
 
   return (
@@ -170,14 +167,12 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
           <h3 className="text-lg font-bold text-slate-800 mb-6">{isManual ? 'Novo Lançamento' : 'Revisar e Editar'}</h3>
           
           <div className="space-y-4">
-            <div className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
-              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center space-x-1">
-                <span>Unidade de Destino</span>
-              </label>
+            <div>
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Unidade de Destino</label>
               <select 
                 value={selectedUnit}
                 onChange={(e) => setSelectedUnit(e.target.value)}
-                className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 ring-blue-500/20 outline-none transition-all cursor-pointer"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 ring-blue-500/20 outline-none transition-all"
               >
                 {accessibleUnits.map(id => (
                   <option key={id} value={id}>{COMPANIES.find(c => c.id === id)?.name}</option>
@@ -185,66 +180,41 @@ const Scanner: React.FC<ScannerProps> = ({ onAddBill, accessibleUnits }) => {
               </select>
             </div>
 
-            <div className="animate-fade-in" style={{ animationDelay: '0.15s' }}>
-              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center space-x-1">
-                <span>Beneficiário</span>
-                <PencilLine className="w-3 h-3 opacity-30" />
-              </label>
+            <div>
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Beneficiário</label>
               <input 
                 type="text" 
-                placeholder="Ex: Nome da Empresa"
                 value={result?.beneficiary} 
                 onChange={e => updateField('beneficiary', e.target.value)}
-                className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 ring-blue-500/20 outline-none hover:bg-white transition-colors"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 ring-blue-500/20 outline-none transition-all"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center space-x-1">
-                  <span>Vencimento</span>
-                </label>
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Vencimento</label>
                 <input 
                   type="date" 
                   value={result?.dueDate} 
                   onChange={e => updateField('dueDate', e.target.value)}
-                  className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 ring-blue-500/20 outline-none hover:bg-white transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 ring-blue-500/20 outline-none transition-all"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center space-x-1">
-                  <span>Valor (R$)</span>
-                </label>
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Valor (R$)</label>
                 <input 
                   type="number" 
                   step="0.01"
-                  placeholder="0,00"
                   value={result?.amount || ''} 
                   onChange={e => updateField('amount', parseFloat(e.target.value))}
-                  className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:ring-2 ring-blue-500/20 outline-none hover:bg-white transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:ring-2 ring-blue-500/20 outline-none transition-all"
                 />
               </div>
-            </div>
-
-            <div className="animate-fade-in" style={{ animationDelay: '0.25s' }}>
-              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center space-x-1">
-                <span>Categoria</span>
-              </label>
-              <select 
-                 value={result?.category}
-                 onChange={e => updateField('category', e.target.value)}
-                 className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 ring-blue-500/20 outline-none hover:bg-white transition-colors cursor-pointer"
-              >
-                {CATEGORIES.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
             </div>
 
             <button 
               onClick={confirmBill}
-              className="w-full py-4 mt-2 bg-emerald-600 text-white rounded-2xl font-bold text-base shadow-lg shadow-emerald-600/20 active:scale-95 transition-all animate-fade-in flex items-center justify-center space-x-2"
-              style={{ animationDelay: '0.3s' }}
+              className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-600/20 active:scale-95 transition-all flex items-center justify-center space-x-2"
             >
               <CheckCircle className="w-5 h-5" />
               <span>Confirmar Lançamento</span>

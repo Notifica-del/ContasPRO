@@ -1,14 +1,14 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Bill, User, UserRole, BillStatus, BillType } from './types';
-import { COMPANIES, INITIAL_USERS } from './constants';
-import { storage } from './storage';
-import Layout from './components/Layout';
-import Dashboard from './components/Dashboard';
-import BillList from './components/BillList';
-import Scanner from './components/Scanner';
-import AdminPanel from './components/AdminPanel';
-import { Bell, Info, CheckCircle, ShieldAlert } from 'lucide-react';
+import { Bill, User, UserRole, BillStatus, BillType } from './types.ts';
+import { COMPANIES, INITIAL_USERS } from './constants.tsx';
+import { storage } from './storage.ts';
+import Layout from './components/Layout.tsx';
+import Dashboard from './components/Dashboard.tsx';
+import BillList from './components/BillList.tsx';
+import Scanner from './components/Scanner.tsx';
+import AdminPanel from './components/AdminPanel.tsx';
+import Assistant from './components/Assistant.tsx';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -18,7 +18,6 @@ const App: React.FC = () => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<'default' | 'granted' | 'denied'>('default');
 
-  // Initialize data
   useEffect(() => {
     try {
       const savedBills = storage.getBills();
@@ -53,12 +52,10 @@ const App: React.FC = () => {
       console.error("Erro na inicialização:", err);
     }
 
-    // Artificial delay for smoother loading feeling
     const timer = setTimeout(() => setIsLoaded(true), 600);
     return () => clearTimeout(timer);
   }, []);
 
-  // Check for upcoming bills (24h reminder)
   const checkUpcomingBills = useCallback(() => {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
     if (Notification.permission !== 'granted' || bills.length === 0) return;
@@ -66,7 +63,6 @@ const App: React.FC = () => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
-
     const sentLog = storage.getSentNotifications();
 
     const upcoming = bills.filter(b => 
@@ -85,11 +81,6 @@ const App: React.FC = () => {
           }
         });
         storage.markNotificationAsSent(bill.id);
-      } else {
-        new Notification('Lembrete de Vencimento', {
-          body: `A conta "${bill.beneficiary}" vence amanhã.`
-        });
-        storage.markNotificationAsSent(bill.id);
       }
     });
   }, [bills]);
@@ -97,7 +88,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (isLoaded) {
       checkUpcomingBills();
-      const interval = setInterval(checkUpcomingBills, 1000 * 60 * 15);
+      const interval = setInterval(checkUpcomingBills, 1000 * 60 * 60);
       return () => clearInterval(interval);
     }
   }, [isLoaded, checkUpcomingBills]);
@@ -126,8 +117,7 @@ const App: React.FC = () => {
       status: billData.status || BillStatus.PENDING,
       companyId: billData.companyId || COMPANIES[0].id,
       type: billData.type || BillType.SINGLE,
-      createdAt: new Date().toISOString(),
-      ...billData
+      createdAt: new Date().toISOString()
     } as Bill;
     setBills(prev => [newBill, ...prev]);
     setActiveTab('bills');
@@ -142,43 +132,30 @@ const App: React.FC = () => {
   };
 
   const requestNotificationPermission = async () => {
-    if (!('Notification' in window)) {
-      alert('Seu navegador não suporta notificações nativas.');
-      return;
-    }
-
+    if (!('Notification' in window)) return;
     const permission = await Notification.requestPermission();
     setNotificationPermission(permission as any);
-    
-    if (permission === 'granted') {
-      alert('Notificações ativadas! Agora você receberá alertas de vencimento.');
-      checkUpcomingBills();
-    }
   };
 
   if (!isLoaded || !currentUser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center">
-          <div className="relative w-16 h-16 mb-6">
-            <div className="absolute inset-0 border-4 border-blue-100 rounded-full"></div>
-            <div className="absolute inset-0 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-          <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent animate-pulse">
-            ContasPro
-          </h2>
-          <p className="text-slate-400 text-sm mt-2">Sincronizando ambiente...</p>
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-slate-400 text-sm mt-4 font-bold uppercase tracking-widest">ContasPro</p>
         </div>
       </div>
     );
   }
 
   const renderTab = () => {
+    const filteredBills = bills.filter(b => currentUser.accessibleUnits.includes(b.companyId));
+    
     switch (activeTab) {
       case 'dashboard':
         return (
           <Dashboard 
-            bills={bills.filter(b => currentUser.accessibleUnits.includes(b.companyId))} 
+            bills={filteredBills} 
             companies={COMPANIES.filter(c => currentUser.accessibleUnits.includes(c.id))} 
             notificationPermission={notificationPermission}
             onRequestNotification={requestNotificationPermission}
@@ -188,67 +165,12 @@ const App: React.FC = () => {
         return <BillList bills={bills} onStatusChange={updateBillStatus} accessibleUnits={currentUser.accessibleUnits} />;
       case 'scanner':
         return <Scanner onAddBill={addBill} accessibleUnits={currentUser.accessibleUnits} />;
+      case 'assistant':
+        return <Assistant bills={filteredBills} />;
       case 'admin':
         return currentUser.role === UserRole.ADMIN ? <AdminPanel users={users} onUpdateUserPermissions={updatePermissions} /> : null;
-      case 'notifications':
-        return (
-          <div className="max-w-md mx-auto space-y-6">
-            <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-xl text-center animate-scale-in">
-               <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                 <Bell className="w-8 h-8 text-blue-600" />
-               </div>
-               <h2 className="text-xl font-bold text-slate-800 mb-2">Monitoramento de Contas</h2>
-               <p className="text-slate-500 text-sm mb-6">Receba avisos automáticos 24h antes do vencimento para evitar juros e multas.</p>
-               
-               {notificationPermission === 'granted' ? (
-                 <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex items-center justify-center space-x-3 mb-6 animate-fade-in">
-                   <CheckCircle className="text-emerald-600 w-5 h-5" />
-                   <span className="text-emerald-700 font-bold text-sm">Alertas Configurados</span>
-                 </div>
-               ) : notificationPermission === 'denied' ? (
-                 <div className="bg-red-50 p-4 rounded-2xl border border-red-100 flex flex-col items-center p-6 space-y-2 mb-6 animate-fade-in">
-                   <ShieldAlert className="text-red-600 w-6 h-6" />
-                   <span className="text-red-700 font-bold text-sm">Acesso Bloqueado</span>
-                   <p className="text-[10px] text-red-500">Libere as notificações nas configurações do navegador para continuar.</p>
-                 </div>
-               ) : (
-                 <button 
-                   onClick={requestNotificationPermission}
-                   className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-all mb-6"
-                 >
-                   Ativar Notificações
-                 </button>
-               )}
-            </div>
-            
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-lg animate-slide-up" style={{ animationDelay: '0.1s' }}>
-               <h3 className="font-bold text-slate-800 mb-4 flex items-center space-x-2">
-                 <Info className="w-4 h-4 text-blue-500" />
-                 <span>Próximos Lembretes</span>
-               </h3>
-               <div className="space-y-3">
-                 {bills.filter(b => b.status === BillStatus.PENDING).slice(0, 5).map((b, i) => (
-                   <div key={b.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between animate-fade-in" style={{ animationDelay: `${0.1 + (i * 0.05)}s` }}>
-                     <div className="min-w-0">
-                       <p className="text-xs font-bold text-slate-900 truncate">{b.beneficiary}</p>
-                       <p className="text-[10px] text-slate-500">Vence em {new Date(b.dueDate).toLocaleDateString()}</p>
-                     </div>
-                     <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${storage.getSentNotifications().includes(b.id) ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
-                       {storage.getSentNotifications().includes(b.id) ? 'Enviado' : 'Agendado'}
-                     </span>
-                   </div>
-                 ))}
-                 {bills.filter(b => b.status === BillStatus.PENDING).length === 0 && (
-                   <div className="text-center py-6">
-                      <p className="text-xs text-slate-400">Sem agendamentos futuros.</p>
-                   </div>
-                 )}
-               </div>
-            </div>
-          </div>
-        );
       default:
-        return <Dashboard bills={bills} companies={COMPANIES} notificationPermission={notificationPermission} onRequestNotification={requestNotificationPermission} />;
+        return null;
     }
   };
 

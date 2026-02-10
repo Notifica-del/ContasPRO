@@ -1,8 +1,9 @@
 
-import React from 'react';
-import { Bill, Company, BillStatus } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Bill, Company, BillStatus } from '../types.ts';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { TrendingUp, Clock, AlertTriangle, CheckCircle2, ReceiptText, Bell, ChevronRight } from 'lucide-react';
+import { TrendingUp, Clock, AlertTriangle, CheckCircle2, ReceiptText, Bell, ChevronRight, Sparkles, Loader2 } from 'lucide-react';
+import { getDashboardInsight } from '../geminiService.ts';
 
 interface DashboardProps {
   bills: Bill[];
@@ -12,6 +13,9 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ bills, companies, notificationPermission, onRequestNotification }) => {
+  const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [loadingInsight, setLoadingInsight] = useState(false);
+  
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
   
@@ -21,6 +25,21 @@ const Dashboard: React.FC<DashboardProps> = ({ bills, companies, notificationPer
   const paidBills = bills.filter(b => b.status === BillStatus.PAID);
 
   const pendingAmount = pendingBills.reduce((acc, b) => acc + b.amount, 0);
+
+  useEffect(() => {
+    const fetchInsight = async () => {
+      setLoadingInsight(true);
+      try {
+        const insight = await getDashboardInsight(bills);
+        setAiInsight(insight);
+      } catch (err) {
+        setAiInsight("Analise suas contas para manter o fluxo de caixa saudável.");
+      } finally {
+        setLoadingInsight(false);
+      }
+    };
+    if (bills.length > 0) fetchInsight();
+  }, [bills]);
 
   const dataByCompany = companies.map(c => {
     const companyBills = bills.filter(b => b.companyId === c.id);
@@ -40,11 +59,34 @@ const Dashboard: React.FC<DashboardProps> = ({ bills, companies, notificationPer
 
   return (
     <div className="space-y-6 animate-fade-in px-1 md:px-0">
-      {/* Banner de Permissão de Notificação - Estilo iOS */}
+      
+      {/* Insight IA - Nova funcionalidade */}
+      <div className="bg-gradient-to-r from-indigo-500 to-blue-600 rounded-3xl p-4 md:p-6 text-white shadow-lg shadow-blue-200 overflow-hidden relative group">
+        <Sparkles className="absolute top-[-10px] right-[-10px] w-24 h-24 text-white/10 rotate-12 transition-transform group-hover:scale-110" />
+        <div className="flex items-start space-x-3 relative z-10">
+          <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-80">Insight da IA</h4>
+            <div className="min-h-[1.5rem] mt-1">
+              {loadingInsight ? (
+                <div className="flex items-center space-x-2">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span className="text-xs opacity-70">Calculando panorama...</span>
+                </div>
+              ) : (
+                <p className="text-sm font-semibold leading-snug animate-fade-in">{aiInsight}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {notificationPermission === 'default' && (
         <div className="bg-white p-4 rounded-2xl border border-blue-100 shadow-sm flex items-center justify-between animate-slide-down">
           <div className="flex items-center space-x-3">
-            <div className="bg-blue-600 p-2.5 rounded-xl shadow-lg shadow-blue-100">
+            <div className="bg-blue-600 p-2.5 rounded-xl">
               <Bell className="w-5 h-5 text-white animate-bounce" />
             </div>
             <div>
@@ -54,14 +96,13 @@ const Dashboard: React.FC<DashboardProps> = ({ bills, companies, notificationPer
           </div>
           <button 
             onClick={onRequestNotification}
-            className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-blue-100 transition-colors active:scale-95"
+            className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-blue-100 transition-colors"
           >
             Configurar
           </button>
         </div>
       )}
 
-      {/* Grid de Stats Compacto para Mobile */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {stats.map((stat, idx) => (
           <div 
@@ -83,7 +124,7 @@ const Dashboard: React.FC<DashboardProps> = ({ bills, companies, notificationPer
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white p-5 md:p-6 rounded-3xl border border-slate-100 shadow-sm animate-scale-in" style={{ animationDelay: '0.2s' }}>
+        <div className="lg:col-span-2 bg-white p-5 md:p-6 rounded-3xl border border-slate-100 shadow-sm animate-scale-in">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-sm md:text-base font-black text-slate-800 uppercase tracking-tight">Distribuição de Gastos</h3>
             <div className="flex items-center space-x-1">
@@ -111,7 +152,7 @@ const Dashboard: React.FC<DashboardProps> = ({ bills, companies, notificationPer
           </div>
         </div>
 
-        <div className="bg-white p-5 md:p-6 rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-scale-in" style={{ animationDelay: '0.3s' }}>
+        <div className="bg-white p-5 md:p-6 rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-scale-in">
           <h3 className="text-sm md:text-base font-black text-slate-800 uppercase tracking-tight mb-6">Últimos Lançamentos</h3>
           <div className="space-y-4">
             {bills.slice(0, 5).map((bill, i) => (
@@ -135,12 +176,6 @@ const Dashboard: React.FC<DashboardProps> = ({ bills, companies, notificationPer
                 </div>
               </div>
             ))}
-            {bills.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-10 text-slate-400">
-                <ReceiptText className="w-12 h-12 opacity-10 mb-2" />
-                <p className="text-[10px] font-bold uppercase tracking-widest">Nenhuma conta</p>
-              </div>
-            )}
           </div>
         </div>
       </div>

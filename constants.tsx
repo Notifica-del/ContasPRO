@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { User, Company, UserRole } from './types';
-import { LayoutDashboard, ReceiptText, ShieldCheck, Camera, Bell } from 'lucide-react';
+import { User, Company, UserRole } from './types.ts';
+import { LayoutDashboard, ReceiptText, ShieldCheck, Camera, Sparkles } from 'lucide-react';
 
 export const COMPANIES: Company[] = [
   { id: 'schroder', name: 'Schroder', color: 'bg-blue-500' },
@@ -45,6 +45,6 @@ export const NAV_ITEMS = [
   { id: 'dashboard', label: 'Início', icon: <LayoutDashboard className="w-6 h-6" /> },
   { id: 'bills', label: 'Contas', icon: <ReceiptText className="w-6 h-6" /> },
   { id: 'scanner', label: 'Escanear', icon: <Camera className="w-6 h-6" /> },
+  { id: 'assistant', label: 'IA Assistente', icon: <Sparkles className="w-6 h-6" /> },
   { id: 'admin', label: 'Admin', icon: <ShieldCheck className="w-6 h-6" />, adminOnly: true },
-  { id: 'notifications', label: 'Avisos', icon: <Bell className="w-6 h-6" /> },
 ];
